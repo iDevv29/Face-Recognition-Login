@@ -1,42 +1,45 @@
 import cv2
 import insightface
 import numpy as np
-import pickle
+
+from database import init_db, save_user
+init_db()
 
 app = insightface.app.FaceAnalysis()
 app.prepare(ctx_id=0, det_size=(640, 640))
 
-def register_face():
-    cam = cv2.VideoCapture(0)
-    encodings = []
-    frame_count = 0
+name = input("Enter your name: ").strip()
 
-    print("Slowly move left, right, up, down.")
+cam = cv2.VideoCapture(0)
+print(f"Registering {name}... Look at the camera.")
 
-    while frame_count < 150:
-        ret, frame = cam.read()
-        faces = app.get(frame)
+encodings = []
+count = 0
 
-        if faces:
-            encodings.append(faces[0].embedding)
-            frame_count += 1
-            cv2.putText(frame, f"Capturing... {frame_count}/150",
-                       (20, 40), cv2.FONT_HERSHEY_SIMPLEX,
-                       1, (0, 255, 0), 2)
+while count < 30:
+    ret, frame = cam.read()
+    faces = app.get(frame)
+    
+    if faces:
+        encoding = faces[0].embedding
+        encodings.append(encoding)
+        count += 1
+        
+        face = faces[0]
+        bbox = face.bbox.astype(int)
+        cv2.rectangle(frame, (bbox[0], bbox[1]), 
+                     (bbox[2], bbox[3]), (0, 255, 0), 2)
+        cv2.putText(frame, f"Capturing... {count}/30", 
+                   (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 
+                   1, (0, 255, 0), 2)
+    
+    cv2.imshow("IndID - Registration", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-        cv2.imshow("IndID - Register", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+cam.release()
+cv2.destroyAllWindows()
 
-    cam.release()
-    cv2.destroyAllWindows()
-
-    if encodings:
-        avg = np.mean(encodings, axis=0)
-        with open("dev_face.pkl", "wb") as f:
-            pickle.dump(avg, f)
-        print(f"Registered succesfully! {len(encodings)} frames captured.")
-    else:
-        print("No face detected.")
-
-register_face()
+if encodings:
+    avg_encoding = np.mean(encodings, axis=0)
+    save_user(name, avg_encoding)
